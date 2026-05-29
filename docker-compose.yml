@@ -24,6 +24,7 @@ services:
       - "8501:8501"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/ooh_reports
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy

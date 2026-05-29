@@ -9,6 +9,7 @@ from database import (
     init_db, get_db_session, save_campaign_to_db, save_performance_to_db,
     Campaign, OOHInventory, Performance, clean_numeric
 )
+from report_engine import generate_campaign_report
 
 # Set page configuration with a premium icon and layouts
 st.set_page_config(
@@ -381,10 +382,11 @@ st.markdown(
 )
 
 # Tabs definitions
-tab_upload_camp, tab_upload_perf, tab_dashboard = st.tabs([
+tab_upload_camp, tab_upload_perf, tab_dashboard, tab_report = st.tabs([
     "📥 Ingest Campaign Details",
     "📊 Ingest Performance Metrics",
-    "📈 Performance Reporting Dashboard"
+    "📈 Performance Reporting Dashboard",
+    "🚀 Delivery Report",
 ])
 
 # -------------------------------------------------------------
@@ -845,3 +847,244 @@ with tab_dashboard:
                 st.dataframe(df_perf, use_container_width=True)
             else:
                 st.info("No performance records found.")
+
+# -------------------------------------------------------------
+# TAB 4: DELIVERY REPORT  (powered by report_engine)
+# -------------------------------------------------------------
+with tab_report:
+    st.markdown("### 🚀 Campaign Delivery Report")
+    st.write(
+        "Selecciona una campaña para generar el reporte completo de entrega: "
+        "KPIs planeado vs actual, desglose por publisher, timeline diario e inventario."
+    )
+
+    if not db_connected:
+        st.warning("⚠️ Requiere conexión a PostgreSQL.")
+    elif len(active_campaign_list) == 0:
+        st.info("💡 No hay campañas en la base de datos. Ingesta una campaña primero.")
+    else:
+        rep_campaign_ids    = [c.id for c in active_campaign_list]
+        rep_campaign_labels = [f"{c.name}  ({c.id})" for c in active_campaign_list]
+
+        col_sel, col_btn = st.columns([4, 1])
+        with col_sel:
+            rep_idx = st.selectbox(
+                "Campaña:",
+                options=range(len(rep_campaign_labels)),
+                format_func=lambda i: rep_campaign_labels[i],
+                key="report_campaign_select",
+            )
+        with col_btn:
+            st.markdown("<div style='margin-top:28px'>", unsafe_allow_html=True)
+            run_report = st.button("Generar Reporte", type="primary", use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        if run_report or st.session_state.get("report_result_id") == rep_campaign_ids[rep_idx]:
+            selected_camp_id = rep_campaign_ids[rep_idx]
+
+            with st.spinner("Procesando datos..."):
+                db = get_db_session()
+                try:
+                    report = generate_campaign_report(selected_camp_id, db)
+                finally:
+                    db.close()
+
+            if report is None:
+                st.error("No se encontró la campaña en la base de datos.")
+            else:
+                st.session_state["report_result_id"] = selected_camp_id
+                camp   = report["campaign"]
+                kpis   = report["kpis"]
+                dtd_df = report["dtd_df"]
+                pub_df = report["publisher_df"]
+                day_df = report["daily_df"]
+                inv_df = report["inventory_df"]
+
+                # ── Campaign header ──────────────────────────────────────
+                st.markdown(f"""
+                <div style='background:linear-gradient(135deg,#1e3c72,#2a5298);
+                            padding:1.5rem 2rem;border-radius:12px;color:white;margin-bottom:1.5rem;'>
+                    <h2 style='margin:0;font-size:1.6rem;font-weight:700;'>{camp.name}</h2>
+                    <div style='opacity:.85;margin-top:.4rem;font-size:.95rem;'>
+                        {camp.id} &nbsp;|&nbsp; {camp.start_date} → {camp.end_date}
+                        &nbsp;|&nbsp; {camp.media_type or "—"}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # ── KPI cards ────────────────────────────────────────────
+                st.markdown("#### KPIs: Planeado vs Entregado")
+
+                def _kpi_card(label, planned, actual, pct, fmt="number", color="#1e3c72"):
+                    if fmt == "currency":
+                        p_str = f"${planned:,.2f}" if planned else "—"
+                        a_str = f"${actual:,.2f}"
+                    else:
+                        p_str = f"{planned:,.0f}" if planned else "—"
+                        a_str = f"{actual:,.0f}"
+                    bar_filled = int(min(pct, 1.0) * 10)
+                    bar = "█" * bar_filled + "░" * (10 - bar_filled)
+                    pct_color = "#10ac84" if pct >= 0.9 else ("#f0932b" if pct >= 0.5 else "#eb4d4b")
+                    return f"""
+                    <div class='metric-card' style='text-align:left;'>
+                        <div style='font-size:.75rem;color:#64748b;font-weight:600;
+                                    text-transform:uppercase;letter-spacing:.5px;
+                                    margin-bottom:.5rem;'>{label}</div>
+                        <div style='font-size:1.6rem;font-weight:700;color:{color};
+                                    line-height:1;'>{a_str}</div>
+                        <div style='font-size:.8rem;color:#94a3b8;margin-top:.25rem;'>
+                            Planeado: {p_str}</div>
+                        <div style='margin-top:.6rem;'>
+                            <span style='font-family:monospace;color:{pct_color};
+                                         font-size:1rem;'>{bar}</span>
+                            <span style='font-size:.85rem;font-weight:700;
+                                         color:{pct_color};margin-left:.5rem;'>
+                                {pct:.1%}</span>
+                        </div>
+                    </div>"""
+
+                k1, k2, k3, k4 = st.columns(4)
+                with k1:
+                    st.markdown(_kpi_card(
+                        "OOH Impressions",
+                        kpis["planned_impressions"], kpis["total_impressions"],
+                        kpis["pct_impressions"]
+                    ), unsafe_allow_html=True)
+                with k2:
+                    st.markdown(_kpi_card(
+                        "Ad Plays",
+                        kpis["planned_ad_plays"], kpis["total_ad_plays"],
+                        kpis["pct_ad_plays"], color="#2a5298"
+                    ), unsafe_allow_html=True)
+                with k3:
+                    st.markdown(_kpi_card(
+                        "Investment (MXN)",
+                        kpis["planned_budget"], kpis["total_spend"],
+                        kpis["pct_spend"], fmt="currency", color="#6c5ce7"
+                    ), unsafe_allow_html=True)
+                with k4:
+                    ecpm_pct = (kpis["real_ecpm"] / kpis["planned_ecpm"]) if kpis["planned_ecpm"] > 0 else 0
+                    st.markdown(_kpi_card(
+                        "eCPM (MXN)",
+                        kpis["planned_ecpm"], kpis["real_ecpm"],
+                        ecpm_pct, fmt="currency", color="#00b894"
+                    ), unsafe_allow_html=True)
+
+                st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
+                st.markdown("---")
+
+                if dtd_df.empty:
+                    st.info("💡 No hay datos de performance cargados para esta campaña aún.")
+                else:
+                    # ── Timeline charts ──────────────────────────────────
+                    st.markdown("#### Timeline de Entrega")
+                    col_c1, col_c2 = st.columns([3, 1])
+
+                    with col_c1:
+                        fig_imp = go.Figure()
+                        fig_imp.add_trace(go.Scatter(
+                            x=day_df["date"], y=day_df["impressions"],
+                            name="Impressions", mode="lines+markers",
+                            line=dict(color="#1e3c72", width=2),
+                        ))
+                        fig_imp.add_trace(go.Bar(
+                            x=day_df["date"], y=day_df["spend"],
+                            name="Spend (MXN)", marker_color="#6c5ce7",
+                            opacity=0.5, yaxis="y2",
+                        ))
+                        fig_imp.update_layout(
+                            yaxis=dict(title=dict(text="Impressions", font=dict(color="#1e3c72"))),
+                            yaxis2=dict(title=dict(text="Spend MXN", font=dict(color="#6c5ce7")),
+                                        overlaying="y", side="right"),
+                            legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,.7)"),
+                            plot_bgcolor="white",
+                            xaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
+                            margin=dict(l=40, r=40, t=20, b=40),
+                            height=350,
+                        )
+                        st.plotly_chart(fig_imp, use_container_width=True)
+
+                    with col_c2:
+                        st.markdown("##### Ad Plays por día")
+                        fig_adp = px.bar(
+                            day_df, x="ad_plays", y=day_df["date"].astype(str),
+                            orientation="h",
+                            color_discrete_sequence=["#2a5298"],
+                            labels={"x": "Ad Plays", "y": "Fecha"},
+                        )
+                        fig_adp.update_layout(
+                            margin=dict(l=0, r=10, t=10, b=10),
+                            height=350, plot_bgcolor="white",
+                            yaxis=dict(autorange="reversed"),
+                        )
+                        st.plotly_chart(fig_adp, use_container_width=True)
+
+                    st.markdown("---")
+
+                    # ── Publisher breakdown ──────────────────────────────
+                    st.markdown("#### Desglose por Publisher / Media Owner")
+                    col_p1, col_p2 = st.columns([1, 2])
+
+                    with col_p1:
+                        fig_sov = px.pie(
+                            pub_df, values="impressions", names="publisher",
+                            hole=0.45,
+                            color_discrete_sequence=px.colors.qualitative.Prism,
+                            title="Share of Voice (Impressions)",
+                        )
+                        fig_sov.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=320)
+                        st.plotly_chart(fig_sov, use_container_width=True)
+
+                    with col_p2:
+                        pub_display = pub_df.copy()
+                        pub_display["impressions"]  = pub_display["impressions"].map("{:,.0f}".format)
+                        pub_display["ad_plays"]     = pub_display["ad_plays"].map("{:,.0f}".format)
+                        pub_display["spend"]        = pub_display["spend"].map("${:,.2f}".format)
+                        pub_display["sov_pct"]      = pub_display["sov_pct"].map("{:.1%}".format)
+                        pub_display.columns = ["Publisher", "Ad Plays", "Impressions", "Spend (MXN)", "SOV %"]
+                        st.dataframe(pub_display, use_container_width=True, hide_index=True)
+
+                    st.markdown("---")
+
+                    # ── Inventory breakdown ──────────────────────────────
+                    st.markdown("#### Desglose por Inventario")
+                    fig_inv_bar = px.bar(
+                        inv_df.head(20),
+                        x="impressions", y="inventory",
+                        color="publisher",
+                        orientation="h",
+                        color_discrete_sequence=px.colors.qualitative.Prism,
+                        labels={"impressions": "Impressions", "inventory": ""},
+                    )
+                    fig_inv_bar.update_layout(
+                        yaxis=dict(autorange="reversed"),
+                        plot_bgcolor="white",
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        height=max(300, min(len(inv_df) * 28, 600)),
+                        legend=dict(orientation="h", y=-0.15),
+                    )
+                    st.plotly_chart(fig_inv_bar, use_container_width=True)
+
+                    with st.expander("Ver tabla completa de inventario"):
+                        inv_display = inv_df.copy()
+                        inv_display["impressions"] = inv_display["impressions"].map("{:,.0f}".format)
+                        inv_display["ad_plays"]    = inv_display["ad_plays"].map("{:,.0f}".format)
+                        inv_display["spend"]       = inv_display["spend"].map("${:,.2f}".format)
+                        inv_display.columns = ["Inventario", "Publisher", "Ad Plays", "Impressions", "Spend (MXN)"]
+                        st.dataframe(inv_display, use_container_width=True, hide_index=True)
+
+                    st.markdown("---")
+
+                    # ── DTD detail ───────────────────────────────────────
+                    with st.expander("Ver detalle DTD (Day-to-Day)"):
+                        dtd_display = dtd_df[["date", "inventory", "publisher",
+                                               "ad_plays", "impressions", "spend", "source"]].copy()
+                        dtd_display.columns = ["Fecha", "Inventario", "Publisher",
+                                                "Ad Plays", "Impressions", "Spend (MXN)", "Fuente"]
+                        st.dataframe(dtd_display, use_container_width=True, hide_index=True)
+                        st.download_button(
+                            label="Descargar DTD como CSV",
+                            data=dtd_display.to_csv(index=False).encode("utf-8"),
+                            file_name=f"DTD_{selected_camp_id}.csv",
+                            mime="text/csv",
+                        )
