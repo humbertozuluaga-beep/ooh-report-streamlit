@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+
+# Scripts de desarrollo/debug
+debug_*.py
+check_excel_rows.py
+test_ingestion.py
+
+# Archivos Excel de muestra
+*.xlsx
+
+# Datos de Postgres locales
+postgres_data/
+
+# Metadatos del editor
+.vscode/
+.idea/

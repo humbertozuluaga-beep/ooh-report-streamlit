@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Claude
+.claude/
+
+# Excel files with sensitive data (sample files - comment out if needed)
+*.xlsx
+
+# Database
+*.db
+*.sqlite
