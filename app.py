@@ -494,7 +494,7 @@ with tab_upload_camp:
             
             # Display inventory preview
             st.markdown(f"#### 📋 Parsed Inventory Locations ({len(df_inventory)} found)")
-            st.dataframe(df_inventory.head(10), use_container_width=True)
+            st.dataframe(df_inventory.head(10), width='stretch')
             
             if len(df_inventory) > 10:
                 st.info(f"Showing first 10 of {len(df_inventory)} inventory records. Click header cells to sort.")
@@ -790,7 +790,7 @@ with tab_dashboard:
                 xaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
                 height=400
             )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+            st.plotly_chart(fig_timeline, width='stretch')
             
             # Side-by-side: Publisher Share and Top Booked spots
             col_chart1, col_chart2 = st.columns(2)
@@ -805,7 +805,7 @@ with tab_dashboard:
                     hole=0.4
                 )
                 fig_pie.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350)
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, width='stretch')
                 
             with col_chart2:
                 st.markdown("#### 📣 Top Performing Ad Play Locations")
@@ -829,7 +829,7 @@ with tab_dashboard:
                     height=350,
                     yaxis=dict(autorange="reversed")
                 )
-                st.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_bar, width='stretch')
                 
             st.markdown("---")
             
@@ -839,12 +839,12 @@ with tab_dashboard:
         
         if tbl_view == "Campaign's OOH Inventory":
             if not df_inv.empty:
-                st.dataframe(df_inv, use_container_width=True)
+                st.dataframe(df_inv, width='stretch')
             else:
                 st.info("No OOH Inventory found.")
         else:
             if not df_perf.empty:
-                st.dataframe(df_perf, use_container_width=True)
+                st.dataframe(df_perf, width='stretch')
             else:
                 st.info("No performance records found.")
 
@@ -1002,7 +1002,7 @@ with tab_report:
                             margin=dict(l=40, r=40, t=20, b=40),
                             height=350,
                         )
-                        st.plotly_chart(fig_imp, use_container_width=True)
+                        st.plotly_chart(fig_imp, width='stretch')
 
                     with col_c2:
                         st.markdown("##### Ad Plays por día")
@@ -1017,7 +1017,7 @@ with tab_report:
                             height=350, plot_bgcolor="white",
                             yaxis=dict(autorange="reversed"),
                         )
-                        st.plotly_chart(fig_adp, use_container_width=True)
+                        st.plotly_chart(fig_adp, width='stretch')
 
                     st.markdown("---")
 
@@ -1033,7 +1033,7 @@ with tab_report:
                             title="Share of Voice (Impressions)",
                         )
                         fig_sov.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=320)
-                        st.plotly_chart(fig_sov, use_container_width=True)
+                        st.plotly_chart(fig_sov, width='stretch')
 
                     with col_p2:
                         pub_display = pub_df.copy()
@@ -1042,7 +1042,7 @@ with tab_report:
                         pub_display["spend"]        = pub_display["spend"].map("${:,.2f}".format)
                         pub_display["sov_pct"]      = pub_display["sov_pct"].map("{:.1%}".format)
                         pub_display.columns = ["Publisher", "Ad Plays", "Impressions", "Spend (MXN)", "SOV %"]
-                        st.dataframe(pub_display, use_container_width=True, hide_index=True)
+                        st.dataframe(pub_display, width='stretch', hide_index=True)
 
                     st.markdown("---")
 
@@ -1063,7 +1063,7 @@ with tab_report:
                         height=max(300, min(len(inv_df) * 28, 600)),
                         legend=dict(orientation="h", y=-0.15),
                     )
-                    st.plotly_chart(fig_inv_bar, use_container_width=True)
+                    st.plotly_chart(fig_inv_bar, width='stretch')
 
                     with st.expander("Ver tabla completa de inventario"):
                         inv_display = inv_df.copy()
@@ -1071,7 +1071,7 @@ with tab_report:
                         inv_display["ad_plays"]    = inv_display["ad_plays"].map("{:,.0f}".format)
                         inv_display["spend"]       = inv_display["spend"].map("${:,.2f}".format)
                         inv_display.columns = ["Inventario", "Publisher", "Ad Plays", "Impressions", "Spend (MXN)"]
-                        st.dataframe(inv_display, use_container_width=True, hide_index=True)
+                        st.dataframe(inv_display, width='stretch', hide_index=True)
 
                     st.markdown("---")
 
@@ -1081,7 +1081,7 @@ with tab_report:
                                                "ad_plays", "impressions", "spend", "source"]].copy()
                         dtd_display.columns = ["Fecha", "Inventario", "Publisher",
                                                 "Ad Plays", "Impressions", "Spend (MXN)", "Fuente"]
-                        st.dataframe(dtd_display, use_container_width=True, hide_index=True)
+                        st.dataframe(dtd_display, width='stretch', hide_index=True)
                         st.download_button(
                             label="Descargar DTD como CSV",
                             data=dtd_display.to_csv(index=False).encode("utf-8"),
